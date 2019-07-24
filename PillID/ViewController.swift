@@ -14,56 +14,64 @@ CBPeripheralDelegate {
     var manager:CBCentralManager!
     var peripheral:CBPeripheral!
     
-    let binary_bluethooth_name = "AB Shutter 3"
-    let binary_bluetooth = CBUUID(string: "0x183B")
+    let binary_bluethooth_name = "AB Shutter3"
+    let binary_bluetooth_service = CBUUID(string: "0x183B")
+    let binary_bluetooth_characteristic = CBUUID(string: "2131")
     
-    // to check availability of bluethooth
+    let number_of_pictures = 16
+    
+    // 1. to check availability of bluethooth and scan for
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         if central.state == CBManagerState.poweredOn {
+            print ("Bluetooth is available")
+            print ("Scanning for devices")
             central.scanForPeripherals(withServices: nil, options: nil)
         } else {
+            print ("Bluetooth in invalid state \(central.state)")
             print("Bluetooth not available.")
         }
     }
     
-    // To scan for and connect to bluetooth device
+    // 2. Connect to bluetooth device
     func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral,
                         advertisementData: [String : Any], rssi RSSI: NSNumber) {
-        guard peripheral.name != nil && peripheral.name?.starts(with: self.binary_bluethooth_name) ?? false else { return } // 1.
-        print("discovered peripheral: \(peripheral.name!)")
+        print ("Discovered Devices")
+//        guard peripheral.name != nil && peripheral.name?.starts(with: self.binary_bluethooth_name) ?? false else { return }
+        print("\(peripheral)")
         
-        
-        let device = (advertisementData as NSDictionary)
-            .object(forKey: CBAdvertisementDataLocalNameKey)
-            as? NSString
-        
-        if device?.contains(binary_bluethooth_name) == true {
+        if (peripheral.identifier.uuidString == binary_bluetooth_service.uuidString) {
             self.manager.stopScan()
-            
             self.peripheral = peripheral
             self.peripheral.delegate = self
-            
-            manager.connect(peripheral, options: nil)
+            self.manager.connect(self.peripheral, options: nil)
+            print ("Connecting to peripheral")
+            // or add [binary_bluetooth_service] to scanForPeripherals withService
         }
     }
     
-    // ensure connection and get list of services
-    func centralManager(central: CBCentralManager, didConnectPeripheral peripheral: CBPeripheral) {
+    // 3. For when the connection is completed. To discover services
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         print("connected to: \(String(describing: peripheral.name))")
         peripheral.discoverServices(nil)
+        print ("Discovering services")
     }
     
+    // 4. When services are discovered, find characteristics
     func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        print ("Services discovered")
         for service in peripheral.services! {
             let thisService = service.uuid
             print("discovered service: \(thisService)")
-            if service.uuid == binary_bluetooth {
+            if service.uuid == binary_bluetooth_service {
                 peripheral.discoverCharacteristics(nil, for: service)
+                print ("Finding characteristics")
             }
         }
     }
     
+    // 5. Once characteristics are found for
     func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        print ("Foun d characteristics")
         for characteristic in service.characteristics! {
             let thisCharacteristic = characteristic.uuid.uuidString
             print("discovered characteristic: \(characteristic) | read=\(characteristic.properties.contains(.read)) | write=\(characteristic.properties.contains(.write))")
@@ -75,10 +83,14 @@ CBPeripheralDelegate {
     }
     
     func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
-        var count = 0;
+        var count = 1;
         
-        if characteristic.uuid.uuidString == "???????" {
+        if ((characteristic.uuid == binary_bluetooth_characteristic) &&
+            (count == number_of_pictures)) {
             self.setRandomBackgroundColor()
+            count = 1
+        } else {
+            count += 1
         }
     }
     
